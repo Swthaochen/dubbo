@@ -77,11 +77,10 @@ public class KubernetesServiceDiscovery extends AbstractServiceDiscovery {
 
     @Override
     public void doInitialize(URL registryURL) throws Exception {
-//        Config config = KubernetesConfigUtils.createKubernetesConfig(registryURL);
         Config config = KubernetesConfigUtils.testK8sInitConfig();
         this.kubernetesClient = new DefaultKubernetesClient(config);
-//        this.currentHostname = System.getenv("HOSTNAME");
-        this.currentHostname = "dubboapi-7fb4cb859b-smw9x";
+        this.currentHostname = System.getenv("HOSTNAME");
+//        this.currentHostname = "dubboapi-7fb4cb859b-smw9x";
         this.registryURL = registryURL;
         this.namespace = config.getNamespace();
         this.enableRegister = registryURL.getParameter(KubernetesClientConst.ENABLE_REGISTER, true);

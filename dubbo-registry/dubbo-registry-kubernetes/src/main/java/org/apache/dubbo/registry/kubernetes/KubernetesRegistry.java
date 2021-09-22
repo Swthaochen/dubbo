@@ -16,12 +16,21 @@
  */
 package org.apache.dubbo.registry.kubernetes;
 
+import com.alibaba.fastjson.JSONObject;
+import io.fabric8.kubernetes.api.model.PodBuilder;
+import io.fabric8.kubernetes.client.Config;
+import io.fabric8.kubernetes.client.DefaultKubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClient;
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.url.component.DubboServiceAddressURL;
 import org.apache.dubbo.common.url.component.ServiceConfigURL;
 import org.apache.dubbo.common.url.component.URLAddress;
 import org.apache.dubbo.common.url.component.URLParam;
 import org.apache.dubbo.registry.NotifyListener;
+import org.apache.dubbo.registry.kubernetes.util.KubernetesClientConst;
+import org.apache.dubbo.registry.kubernetes.util.KubernetesConfigUtils;
 import org.apache.dubbo.registry.support.FailbackRegistry;
 
 import java.util.*;
@@ -38,6 +47,10 @@ import static org.apache.dubbo.common.constants.RegistryConstants.*;
  * {@link KubernetesServiceDiscovery} is the real implementation of Kubernetes
  */
 public class KubernetesRegistry extends FailbackRegistry {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
+
+    public final static String KUBERNETES_PROVIDERS_KEY = "io.dubbo/providers";
+
     public KubernetesRegistry(URL url) {
         super(url);
     }
@@ -50,7 +63,38 @@ public class KubernetesRegistry extends FailbackRegistry {
     // Sending a registration request to the server side
     @Override
     public void doRegister(URL url) {
+        Config config = KubernetesConfigUtils.testK8sInitConfig();
+        KubernetesClient kubernetesClient = new DefaultKubernetesClient(config);
+        String currentHostname = System.getenv("HOSTNAME");
+        String namespace = config.getNamespace();
 
+        boolean availableAccess;
+        try {
+            availableAccess = kubernetesClient.pods().inNamespace(namespace).withName(currentHostname).get() != null;
+        } catch (Throwable e) {
+            availableAccess = false;
+        }
+        if (!availableAccess) {
+            String message = "Unable to access api server. " +
+                "Please check your url config." +
+                " Master URL: " + config.getMasterUrl() +
+                " Hostname: " + currentHostname;
+            logger.error(message);
+        } else {
+            logger.info("Successfully to init pod in hostname : " + currentHostname);
+            KubernetesMeshEnvListener.injectKubernetesEnv(kubernetesClient, namespace);
+        }
+
+        kubernetesClient.pods()
+            .inNamespace(namespace)
+            .withName(currentHostname)
+            .edit(pod ->
+                new PodBuilder(pod)
+                    .editOrNewMetadata()
+                    .addToAnnotations(KUBERNETES_PROVIDERS_KEY, JSONObject.toJSONString(url.toFullString()))
+                    .endMetadata()
+                    .build());
+//        kubernetesClient.close();
     }
 
     @Override
