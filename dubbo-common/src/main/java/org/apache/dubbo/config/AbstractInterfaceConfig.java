@@ -79,6 +79,8 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
      */
     protected String local;
 
+    protected Integer nodeport;
+
     /**
      * Local stub class name for the service interface
      */
@@ -518,6 +520,14 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     public void setProxy(String proxy) {
 
         this.proxy = proxy;
+    }
+
+    public Integer getNodeport() {
+        return this.nodeport;
+    }
+
+    public void setNodeport(Integer nodeport) {
+        this.nodeport = nodeport;
     }
 
     public Integer getConnections() {

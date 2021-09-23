@@ -17,6 +17,8 @@
 package org.apache.dubbo.registry.kubernetes;
 
 import com.alibaba.fastjson.JSONObject;
+import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.DefaultKubernetesClient;
@@ -50,6 +52,7 @@ public class KubernetesRegistry extends FailbackRegistry {
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
     public final static String KUBERNETES_PROVIDERS_KEY = "io.dubbo/providers";
+    public final static String KUBERNETES_PATHNAME_KEY = "io.dubbo/pathname";
 
     public KubernetesRegistry(URL url) {
         super(url);
@@ -63,10 +66,22 @@ public class KubernetesRegistry extends FailbackRegistry {
     // Sending a registration request to the server side
     @Override
     public void doRegister(URL url) {
+        Map<String, String> parameters = url.getParameters();
+        if (parameters.get("side").equals("consumer")) return;
         Config config = KubernetesConfigUtils.testK8sInitConfig();
         KubernetesClient kubernetesClient = new DefaultKubernetesClient(config);
         String currentHostname = System.getenv("HOSTNAME");
         String namespace = config.getNamespace();
+
+        // Get Ip and Port for Comsumers to request
+        URL registryUrl = this.getUrl();
+        String protocol = url.getProtocol();
+        String address = registryUrl.getIp();
+        int nodeport = Integer.parseInt(url.getParameter("nodeport"));
+        String path = url.getPath();
+
+        ServiceConfigURL configURL = new ServiceConfigURL(protocol, null, null, address, nodeport, path);
+        URL providerUrl = configURL.addParameters(parameters);
 
         boolean availableAccess;
         try {
@@ -91,10 +106,11 @@ public class KubernetesRegistry extends FailbackRegistry {
             .edit(pod ->
                 new PodBuilder(pod)
                     .editOrNewMetadata()
-                    .addToAnnotations(KUBERNETES_PROVIDERS_KEY, JSONObject.toJSONString(url.toFullString()))
+                    .addToLabels(KUBERNETES_PATHNAME_KEY, path)
+                    .addToAnnotations(KUBERNETES_PROVIDERS_KEY, providerUrl.toFullString())
                     .endMetadata()
                     .build());
-//        kubernetesClient.close();
+        kubernetesClient.close();
     }
 
     @Override
@@ -104,34 +120,50 @@ public class KubernetesRegistry extends FailbackRegistry {
 
     @Override
     public void doSubscribe(URL url, NotifyListener listener) {
-        List<URL> urls = new LinkedList<>();
+        Map<String, String> parameters = url.getParameters();
+        if (parameters.get("side").equals("provider")) return;
+        Config config = KubernetesConfigUtils.testK8sInitConfig();
+        KubernetesClient kubernetesClient = new DefaultKubernetesClient(config);
+        String namespace = config.getNamespace();
+        String path = url.getPath();
 
-        String address = "dubbo://" + "192.168.115.137" + ":" + "31312" + "/org.apache.dubbo.demo.api.DemoService";
-        String params = "anyhost%3Dtrue%26application%3Dapi-dubbo-provider%26deprecated%3Dfalse%26dubbo%3D2.0.2%26dynamic%3Dtrue%26generic%3Dfalse%26interface%3Dorg.apache.dubbo.demo.api.DemoService%26methods%3DsayHello%26release%3D1.0-SNAPSHOT%26revision%3D1.0-SNAPSHOT%26service-name-mapping%3Dtrue%26side%3Dprovider";
+        Pod pod = kubernetesClient.pods().inNamespace(namespace).withLabel(KUBERNETES_PATHNAME_KEY, path).list().getItems().get(0);
+        ObjectMeta metadata = pod.getMetadata();
+        Map<String, String> annotations = metadata.getAnnotations();
+        String s = annotations.get(KUBERNETES_PROVIDERS_KEY);
+        String[] parts = new String[2];
+        int index = s.indexOf('?');
+        if (index == -1) {
+            return;
+        } else {
+            parts[0] = s.substring(0, index);
+            parts[1] = s.substring(index+1);
+        }
+        List<URL> urls = new LinkedList<>();
+        String address = parts[0];
+        String params = parts[1];
 
         List<String> categories = toCategories(url);
 
         if (categories.contains(PROVIDERS_CATEGORY)){
-            ServiceConfigURL consumerURL = new ServiceConfigURL("dubbo", null, null, "10.100.3.213", 0, "org.apache.dubbo.demo.api.DemoService");
-            Map<String, String> paramsPair = StringToMap("application=api-dubbo-consumer&category=providers,configurators,routers&interface=org.apache.dubbo.demo.api.DemoService&pid=5524&side=consumer&sticky=false");
-            URL consumer = consumerURL.addParameters(paramsPair);
-
             URLAddress urlAddress = URLAddress.parse(address, "dubbo", false);
             URLParam urlParam = URLParam.parse(params, true, null);
-            DubboServiceAddressURL providerURL = new DubboServiceAddressURL(urlAddress, urlParam, consumer, null);
+            DubboServiceAddressURL providerURL = new DubboServiceAddressURL(urlAddress, urlParam, url, null);
             urls.add(providerURL);
         }
 
         if (categories.contains(CONFIGURATORS_CATEGORY)) {
-            ServiceConfigURL configureURL = new ServiceConfigURL("empty", null, null, "10.100.3.213", 0, "org.apache.dubbo.demo.api.DemoService");
-            Map<String, String> configureParamsPair = StringToMap("side=consumer&interface=org.apache.dubbo.demo.api.DemoService&pid=11800&application=api-dubbo-consumer&dubbo=2.0.2&release=3.0.3-SNAPSHOT&sticky=false&category=configurators&methods=sayHello&timestamp=1632189983925");
+            ServiceConfigURL configureURL = new ServiceConfigURL("empty", null, null, url.getIp(), 0, url.getPath());
+            Map<String, String> configureParamsPair = url.getParameters();
+            configureParamsPair.put("category", "configurators");
             URL configureURLUrl = configureURL.addParameters(configureParamsPair);
             urls.add(configureURLUrl);
         }
 
         if (categories.contains(ROUTERS_CATEGORY)) {
-            ServiceConfigURL routerURL = new ServiceConfigURL("empty", null, null, "10.100.3.213", 0, "org.apache.dubbo.demo.api.DemoService");
-            Map<String, String> routerParamsPair = StringToMap("side=consumer&interface=org.apache.dubbo.demo.api.DemoService&pid=11800&application=api-dubbo-consumer&dubbo=2.0.2&release=3.0.3-SNAPSHOT&sticky=false&category=routers&methods=sayHello&timestamp=1632189983925");
+            ServiceConfigURL routerURL = new ServiceConfigURL("empty", null, null, url.getIp(), 0, url.getPath());
+            Map<String, String> routerParamsPair = url.getParameters();
+            routerParamsPair.put("category", "routers");
             URL routerURLUrl = routerURL.addParameters(routerParamsPair);
             urls.add(routerURLUrl);
         }
@@ -139,7 +171,6 @@ public class KubernetesRegistry extends FailbackRegistry {
         if (categories.contains(CONSUMERS_CATEGORY)) {
             return;
         }
-
         notify(url, listener, urls);
 
     }
