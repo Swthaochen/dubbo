@@ -68,13 +68,14 @@ public class KubernetesRegistry extends FailbackRegistry {
     public void doRegister(URL url) {
         Map<String, String> parameters = url.getParameters();
         if (parameters.get("side").equals("consumer")) return;
-        Config config = KubernetesConfigUtils.testK8sInitConfig();
+        URL registryUrl = this.getUrl();
+        String registryAddress = registryUrl.getAddress();
+        Config config = KubernetesConfigUtils.testK8sInitConfig(registryAddress);
         KubernetesClient kubernetesClient = new DefaultKubernetesClient(config);
         String currentHostname = System.getenv("HOSTNAME");
         String namespace = config.getNamespace();
 
         // Get Ip and Port for Comsumers to request
-        URL registryUrl = this.getUrl();
         String protocol = url.getProtocol();
         String address = registryUrl.getIp();
         int nodeport = Integer.parseInt(url.getParameter("nodeport"));
@@ -122,7 +123,9 @@ public class KubernetesRegistry extends FailbackRegistry {
     public void doSubscribe(URL url, NotifyListener listener) {
         Map<String, String> parameters = url.getParameters();
         if (parameters.get("side").equals("provider")) return;
-        Config config = KubernetesConfigUtils.testK8sInitConfig();
+        URL registryUrl = this.getUrl();
+        String registryAddress = registryUrl.getAddress();
+        Config config = KubernetesConfigUtils.testK8sInitConfig(registryAddress);
         KubernetesClient kubernetesClient = new DefaultKubernetesClient(config);
         String namespace = config.getNamespace();
         String path = url.getPath();
