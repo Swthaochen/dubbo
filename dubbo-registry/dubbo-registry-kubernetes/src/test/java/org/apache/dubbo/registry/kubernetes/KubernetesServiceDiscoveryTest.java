@@ -45,6 +45,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
+import static org.apache.dubbo.registry.kubernetes.util.KubernetesConfigUtils.testK8sInitConfig;
+
 @ExtendWith({MockitoExtension.class})
 public class KubernetesServiceDiscoveryTest {
     public KubernetesServer mockServer = new KubernetesServer(false, true);
@@ -135,6 +137,11 @@ public class KubernetesServiceDiscoveryTest {
         serviceDiscovery.unregister(serviceInstance);
 
         serviceDiscovery.destroy();
+    }
+
+    @Test
+    public void testProperties() {
+        Config config = testK8sInitConfig("10.100.2.180:8801");
     }
 
     @Test
