@@ -16,6 +16,7 @@
  */
 package org.apache.dubbo.rpc.cluster.support;
 
+import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
@@ -29,10 +30,7 @@ import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.apache.dubbo.rpc.support.RpcUtils;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_RETRIES;
 import static org.apache.dubbo.common.constants.CommonConstants.RETRIES_KEY;
@@ -72,7 +70,18 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 // check again
                 checkInvokers(copyInvokers, invocation);
             }
-            Invoker<T> invoker = select(loadbalance, invocation, copyInvokers, invoked);
+            String protocol = this.directory.getUrl().getProtocol();
+            Invoker<T> invoker = null;
+            if (protocol.equals("kubernetes")) {
+                // if protocol equals kubernetes, get first invoker
+                invoker = copyInvokers.get(0);
+                System.out.println("k8s");
+            } else {
+                // if protocol does not equal kubernetes, select an invoker by loadbalance
+                invoker = select(loadbalance, invocation, copyInvokers, invoked);
+                System.out.println("others");
+            }
+//            Invoker<T> invoker = select(loadbalance, invocation, copyInvokers, invoked);
             invoked.add(invoker);
             RpcContext.getServiceContext().setInvokers((List) invoked);
             try {
