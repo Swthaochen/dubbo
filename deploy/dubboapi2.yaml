@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: dubboapi2
+    type: dubboapi
+  name: dubboapi2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dubboapi2
+      type: dubboapi
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: dubboapi2
+        type: dubboapi
+    spec:
+      containers:
+      - image: localhost:5000/dubboapi:v1
+        name: dubboapi
+        resources: {}
+status: {}

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dubboapi-svc
+  labels:
+    app: dubboapi-svc
+    istio: ingressgateway    
+spec:
+  ports:
+    - name: dubbo
+      protocol: TCP
+      port: 20880
+      targetPort: 20880
+  selector:
+    type: dubboapi
