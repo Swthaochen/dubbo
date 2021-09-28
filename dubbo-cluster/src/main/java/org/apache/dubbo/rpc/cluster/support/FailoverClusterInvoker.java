@@ -74,12 +74,12 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
             Invoker<T> invoker = null;
             if (protocol.equals("kubernetes")) {
                 // if protocol equals kubernetes, get first invoker
+                logger.info("Protocol : kubernetes, so we will ignore the load balance");
                 invoker = copyInvokers.get(0);
-                System.out.println("k8s");
             } else {
                 // if protocol does not equal kubernetes, select an invoker by loadbalance
+                logger.info("Protocol : " + protocol + ", so we will use the load balance");
                 invoker = select(loadbalance, invocation, copyInvokers, invoked);
-                System.out.println("others");
             }
 //            Invoker<T> invoker = select(loadbalance, invocation, copyInvokers, invoked);
             invoked.add(invoker);
