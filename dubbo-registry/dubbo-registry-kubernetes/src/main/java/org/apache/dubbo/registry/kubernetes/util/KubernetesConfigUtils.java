@@ -104,7 +104,7 @@ public class KubernetesConfigUtils {
             .build();
     }
 
-    public static Config testK8sInitConfig(String address) {
+    public static Config K8sInitConfig(String address) {
 
         KubernetesConfigUtils kubernetesConfigUtils = new KubernetesConfigUtils();
         K8sUser k8sUser = kubernetesConfigUtils.new K8sUser();

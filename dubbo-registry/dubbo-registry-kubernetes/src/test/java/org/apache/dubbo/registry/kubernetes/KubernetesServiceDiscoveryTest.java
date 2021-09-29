@@ -45,7 +45,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
-import static org.apache.dubbo.registry.kubernetes.util.KubernetesConfigUtils.testK8sInitConfig;
+import static org.apache.dubbo.registry.kubernetes.util.KubernetesConfigUtils.K8sInitConfig;
 
 @ExtendWith({MockitoExtension.class})
 public class KubernetesServiceDiscoveryTest {
@@ -141,7 +141,7 @@ public class KubernetesServiceDiscoveryTest {
 
     @Test
     public void testProperties() {
-        Config config = testK8sInitConfig("10.100.2.180:8801");
+        Config config = K8sInitConfig("10.100.2.180:8801");
     }
 
     @Test

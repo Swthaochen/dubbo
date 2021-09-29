@@ -54,8 +54,15 @@ public class KubernetesRegistry extends FailbackRegistry {
     public final static String KUBERNETES_PROVIDERS_KEY = "io.dubbo/providers";
     public final static String KUBERNETES_PATHNAME_KEY = "io.dubbo/pathname";
 
+    private final KubernetesClient kubernetesClient;
+
+    private final String namespace;
+
     public KubernetesRegistry(URL url) {
         super(url);
+        Config config = KubernetesConfigUtils.K8sInitConfig(url.getAddress());
+        this.kubernetesClient = new DefaultKubernetesClient(config);
+        this.namespace = config.getNamespace();
     }
 
     @Override
@@ -69,11 +76,7 @@ public class KubernetesRegistry extends FailbackRegistry {
         Map<String, String> parameters = url.getParameters();
         if (parameters.get("side").equals("consumer")) return;
         URL registryUrl = this.getUrl();
-        String registryAddress = registryUrl.getAddress();
-        Config config = KubernetesConfigUtils.testK8sInitConfig(registryAddress);
-        KubernetesClient kubernetesClient = new DefaultKubernetesClient(config);
         String currentHostname = System.getenv("HOSTNAME");
-        String namespace = config.getNamespace();
 
         // Get Ip and Port for Comsumers to request
         String protocol = url.getProtocol();
@@ -84,25 +87,8 @@ public class KubernetesRegistry extends FailbackRegistry {
         ServiceConfigURL configURL = new ServiceConfigURL(protocol, null, null, address, nodeport, path);
         URL providerUrl = configURL.addParameters(parameters);
 
-        boolean availableAccess;
-        try {
-            availableAccess = kubernetesClient.pods().inNamespace(namespace).withName(currentHostname).get() != null;
-        } catch (Throwable e) {
-            availableAccess = false;
-        }
-        if (!availableAccess) {
-            String message = "Unable to access api server. " +
-                "Please check your url config." +
-                " Master URL: " + config.getMasterUrl() +
-                " Hostname: " + currentHostname;
-            logger.error(message);
-        } else {
-            logger.info("Successfully to init pod in hostname : " + currentHostname);
-            KubernetesMeshEnvListener.injectKubernetesEnv(kubernetesClient, namespace);
-        }
-
-        kubernetesClient.pods()
-            .inNamespace(namespace)
+        this.kubernetesClient.pods()
+            .inNamespace(this.namespace)
             .withName(currentHostname)
             .edit(pod ->
                 new PodBuilder(pod)
@@ -123,14 +109,9 @@ public class KubernetesRegistry extends FailbackRegistry {
     public void doSubscribe(URL url, NotifyListener listener) {
         Map<String, String> parameters = url.getParameters();
         if (parameters.get("side").equals("provider")) return;
-        URL registryUrl = this.getUrl();
-        String registryAddress = registryUrl.getAddress();
-        Config config = KubernetesConfigUtils.testK8sInitConfig(registryAddress);
-        KubernetesClient kubernetesClient = new DefaultKubernetesClient(config);
-        String namespace = config.getNamespace();
         String path = url.getPath();
 
-        Pod pod = kubernetesClient.pods().inNamespace(namespace).withLabel(KUBERNETES_PATHNAME_KEY, path).list().getItems().get(0);
+        Pod pod = this.kubernetesClient.pods().inNamespace(this.namespace).withLabel(KUBERNETES_PATHNAME_KEY, path).list().getItems().get(0);
         ObjectMeta metadata = pod.getMetadata();
         Map<String, String> annotations = metadata.getAnnotations();
         String s = annotations.get(KUBERNETES_PROVIDERS_KEY);
